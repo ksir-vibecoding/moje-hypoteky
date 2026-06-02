@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient'; 
+import { supabase } from '../supabaseClient';
 
 const Dashboard = () => {
   const [cases, setCases] = useState([]);
   const [newName, setNewName] = useState('');
-
-  // 1. Nové stavy pro vyhledávání a filtrování
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('Vše');
+  
+  // Nový stav pro modální okno
+  const [selectedClient, setSelectedClient] = useState(null);
 
   const statusOptions = ["Nový", "Čeká na klienta", "Odhad nemovitosti", "Skórink", "Risk", "Podpis", "Žádost"];
 
@@ -18,109 +19,57 @@ const Dashboard = () => {
     if (data) setCases(data);
   }
 
-  async function addClient() {
-    if (!newName) return;
-    await supabase.from('cases').insert([{ client_name: newName, status: 'Nový' }]);
-    setNewName('');
+  async function updateClient() {
+    if (!selectedClient) return;
+    await supabase.from('cases')
+      .update({ 
+        phone: selectedClient.phone, 
+        email: selectedClient.email, 
+        amount: selectedClient.amount, 
+        notes: selectedClient.notes 
+      })
+      .eq('id', selectedClient.id);
+    setSelectedClient(null);
     fetchCases();
   }
 
-  async function deleteClient(id) {
-    await supabase.from('cases').delete().eq('id', id);
-    fetchCases();
-  }
-
-  async function updateStatus(id, newStatus) {
-    await supabase.from('cases').update({ status: newStatus }).eq('id', id);
-    fetchCases();
-  }
-
-  // 2. Logika pro filtrování seznamu v reálném čase
   const filteredCases = cases.filter((c) => {
-    const matchesSearch = c.client_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = c.client_name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filterStatus === 'Vše' || c.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold text-gray-800 mb-8">Moje hypotéky</h1>
-
-      {/* Formulář pro přidání klienta */}
-      <div className="bg-white p-6 rounded-xl shadow-md mb-6 flex gap-2">
-        <input 
-          className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Jméno nového klienta..." 
-          value={newName} 
-          onChange={(e) => setNewName(e.target.value)} 
-        />
-        <button 
-          onClick={addClient} 
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          Přidat
-        </button>
-      </div>
-
-      {/* 3. Panel pro vyhledávání a filtrování */}
-      <div className="bg-white p-4 rounded-xl shadow-md mb-8 flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Hledat klienta</label>
-          <input 
-            className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            placeholder="Napiš jméno..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        
-        <div className="w-full sm:w-48">
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Stav hypotéky</label>
-          <select 
-            className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="Vše">Zobrazit vše</option>
-            {statusOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Seznam klientů - nyní vykresluje profiltrované pole filteredCases */}
-      <ul className="space-y-3">
+    <div className="max-w-3xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Moje hypotéky</h1>
+      
+      {/* Seznam - kliknutím na jméno otevřeš detail */}
+      <ul className="space-y-2">
         {filteredCases.map((c) => (
-          <li key={c.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-            <span className="font-medium text-gray-700 w-1/3">{c.client_name}</span>
-            
-            <div className="flex gap-4 items-center">
-              <select 
-                value={c.status}
-                onChange={(e) => updateStatus(c.id, e.target.value)}
-                className="bg-gray-100 text-gray-700 text-sm font-semibold py-1 px-3 rounded-full border-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                {statusOptions.map(option => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-
-              <button 
-                onClick={() => deleteClient(c.id)} 
-                className="text-red-500 hover:text-red-700 text-sm font-medium"
-              >
-                Smazat
-              </button>
-            </div>
+          <li key={c.id} className="bg-white p-4 rounded-lg shadow cursor-pointer hover:bg-blue-50" onClick={() => setSelectedClient(c)}>
+            <span className="font-semibold">{c.client_name}</span> - <span className="text-sm text-gray-500">{c.status}</span>
           </li>
         ))}
-
-        {/* Informace pro případ, že vyhledávání nic nenašlo */}
-        {filteredCases.length === 0 && (
-          <p className="text-center text-gray-400 py-4 text-sm">Žádný klient neodpovídá zadání.</p>
-        )}
       </ul>
+
+      {/* Modální okno pro detail */}
+      {selectedClient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-2xl">
+            <h2 className="text-xl font-bold mb-4">Detail: {selectedClient.client_name}</h2>
+            
+            <input className="w-full p-2 border mb-2" placeholder="Telefon" value={selectedClient.phone || ''} onChange={(e) => setSelectedClient({...selectedClient, phone: e.target.value})} />
+            <input className="w-full p-2 border mb-2" placeholder="Email" value={selectedClient.email || ''} onChange={(e) => setSelectedClient({...selectedClient, email: e.target.value})} />
+            <input className="w-full p-2 border mb-2" type="number" placeholder="Částka" value={selectedClient.amount || ''} onChange={(e) => setSelectedClient({...selectedClient, amount: e.target.value})} />
+            <textarea className="w-full p-2 border mb-4" placeholder="Poznámky" value={selectedClient.notes || ''} onChange={(e) => setSelectedClient({...selectedClient, notes: e.target.value})} />
+            
+            <div className="flex gap-2">
+              <button onClick={updateClient} className="bg-blue-600 text-white px-4 py-2 rounded">Uložit</button>
+              <button onClick={() => setSelectedClient(null)} className="bg-gray-200 px-4 py-2 rounded">Zrušit</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
