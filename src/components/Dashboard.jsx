@@ -19,7 +19,7 @@ const Dashboard = () => {
 
   async function addClient() {
     if (!newName) return;
-    await supabase.from('cases').insert([{ client_name: newName, status: 'Nový' }]);
+    await supabase.from('cases').insert([{ client_name: newName, status: 'Nový', status_updated_at: new Date().toISOString() }]);
     setNewName('');
     fetchCases();
   }
@@ -32,7 +32,12 @@ const Dashboard = () => {
 
   async function updateStatus(e, id, newStatus) {
     e.stopPropagation();
-    await supabase.from('cases').update({ status: newStatus }).eq('id', id);
+    await supabase.from('cases')
+      .update({ 
+        status: newStatus, 
+        status_updated_at: new Date().toISOString() 
+      })
+      .eq('id', id);
     fetchCases();
   }
 
@@ -50,6 +55,12 @@ const Dashboard = () => {
     fetchCases();
   }
 
+  const getDaysSinceUpdate = (dateString) => {
+    if (!dateString) return 0;
+    const diffTime = Math.abs(new Date() - new Date(dateString));
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   const filteredCases = cases.filter((c) => {
     const name = c.client_name || '';
     const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -61,13 +72,11 @@ const Dashboard = () => {
     <div className="max-w-3xl mx-auto p-6 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold mb-8">Moje hypotéky</h1>
 
-      {/* Formulář pro přidání */}
       <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex gap-2">
         <input className="flex-1 p-2 border rounded" placeholder="Jméno klienta" value={newName} onChange={(e) => setNewName(e.target.value)} />
         <button onClick={addClient} className="bg-blue-600 text-white px-4 py-2 rounded">Přidat</button>
       </div>
 
-      {/* Filtry */}
       <div className="flex gap-4 mb-6">
         <input className="flex-1 p-2 border rounded" placeholder="Hledat..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         <select className="p-2 border rounded" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
@@ -76,24 +85,30 @@ const Dashboard = () => {
         </select>
       </div>
 
-      {/* Seznam */}
       <ul className="space-y-3">
-        {filteredCases.map((c) => (
-          <li key={c.id} className="bg-white p-4 rounded-lg shadow-sm border flex justify-between items-center">
-            <span className="font-medium cursor-pointer text-blue-600 hover:underline" onClick={() => setSelectedClient({...c})}>
-              {c.client_name}
-            </span>
-            <div className="flex gap-2 items-center">
-              <select value={c.status} onChange={(e) => updateStatus(e, c.id, e.target.value)} className="text-xs p-1 bg-gray-100 rounded">
-                {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
-              <button onClick={(e) => deleteClient(e, c.id)} className="text-red-500 text-xs">Smazat</button>
-            </div>
-          </li>
-        ))}
+        {filteredCases.map((c) => {
+          const days = getDaysSinceUpdate(c.status_updated_at);
+          return (
+            <li key={c.id} className="bg-white p-4 rounded-lg shadow-sm border flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="font-medium cursor-pointer text-blue-600 hover:underline" onClick={() => setSelectedClient({...c})}>
+                  {c.client_name}
+                </span>
+                <span className={`text-xs ${days >= 3 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                  {days} dní ve stavu {c.status}
+                </span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <select value={c.status} onChange={(e) => updateStatus(e, c.id, e.target.value)} className="text-xs p-1 bg-gray-100 rounded">
+                  {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                <button onClick={(e) => deleteClient(e, c.id)} className="text-red-500 text-xs">Smazat</button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
-      {/* Modální okno */}
       {selectedClient && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl">
